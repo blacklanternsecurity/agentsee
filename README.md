@@ -4,7 +4,7 @@ Live multi-pane terminal dashboard for [Claude Code](https://docs.anthropic.com/
 
 **Zero dependencies** — pure Python 3.10+ stdlib (`curses`, `json`, `threading`).
 
-![agentsee dashboard](https://github.com/user-attachments/assets/placeholder)
+![agentsee dashboard](screenshot.jpeg)
 
 ## Features
 
