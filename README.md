@@ -6,6 +6,8 @@ Live multi-pane terminal dashboard for [Claude Code](https://docs.anthropic.com/
 
 ![agentsee dashboard](screenshot.jpeg)
 
+🔵 Agent reasoning &nbsp;&nbsp; 🟡 Shell/Bash commands &nbsp;&nbsp; 🟢 Tool output &nbsp;&nbsp; ⚪ Other tool calls
+
 ## Features
 
 - **Auto-discovery** — automatically detects new agents as they spawn, no configuration needed
