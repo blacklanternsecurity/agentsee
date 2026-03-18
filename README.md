@@ -1,152 +1,219 @@
 # agentsee
 
-Live multi-pane terminal dashboard for [Claude Code](https://docs.anthropic.com/en/docs/claude-code) agents. Watch your agents think, execute commands, and call tools in real time.
-
-**Zero dependencies** — pure Python 3.10+ stdlib (`curses`, `json`, `threading`).
+Operator control plane for [Claude Code](https://docs.anthropic.com/en/docs/claude-code) agents. Watch agents in real time, hold them mid-run, chat with them, and switch between autonomous and supervised modes — all from a web dashboard or terminal.
 
 ![agentsee dashboard](screenshot.jpeg)
 
-🔵 Agent reasoning &nbsp;&nbsp; 🟡 Shell/Bash commands &nbsp;&nbsp; 🟢 Tool output &nbsp;&nbsp; ⚪ Other tool calls
+## Two interfaces
+
+**Web dashboard** — Node.js server with React UI. Provides operator controls (hold, release, mode switching, chat) on top of the live agent stream. Requires `npm install`.
+
+**Terminal dashboard** — Zero-dependency Python curses UI. Read-only multi-pane view. Just `bash dashboard.sh`.
+
+Both parse the same JSONL transcripts from `~/.claude/projects/` and show the same color-coded output.
 
 ## Features
 
-- **Auto-discovery** — automatically detects new agents as they spawn, no configuration needed
-- **Multi-pane split view** — see multiple agents side by side in a single terminal
-- **Color-coded output** — agent reasoning (cyan), shell commands (yellow), tool calls (dim), tool results (green)
-- **Live follow** — auto-scrolls with new output, scroll up to pause, jump to bottom to resume
-- **Idle detection** — pane headers show how long since last activity with escalating color warnings (gold → orange → red)
-- **Agent browser** — press `b` to browse all agents from the current session, add completed agents back to the dashboard
-- **Single-agent modes** — one-shot print, live tail (`-f`), or pipe from stdin
-- **Purge history** — `--purge` to wipe all agent transcripts for a clean slate
+### Monitoring
+- **Auto-discovery** — detects new agents as they spawn, no configuration needed
+- **Color-coded output** — agent reasoning (cyan), shell commands (yellow), tool results (green), other tool calls (dim)
+- **Live follow** — auto-scrolls with new output, scroll up to pause
+- **Idle detection** — escalating color warnings (gold 30s, orange 60s, red 120s)
+- **Chunked history** — scroll to the top to load older entries from disk on demand
+
+### Operator controls (web dashboard)
+- **Hold/release** — force any agent to stop and check in on its next tool call
+- **Supervised mode** — require operator approval after every tool call (or every N)
+- **Operator chat** — two-way communication with held agents via MCP tool responses
+- **Mode switching** — toggle any agent between autonomous and supervised mid-run
+- **Tabbed workspaces** — group agents into tabs, auto-tiling pane grid, drag agents between tabs
+
+### Architecture
+- **Hook enforcement** — PreToolUse hooks block tool calls when agents are held or over their turn threshold
+- **MCP server** — `operator_checkpoint` (blocking) and `operator_notify` (non-blocking) tools that agents call to communicate with the operator
+- **JSONL tailer** — per-agent file tailing with 500-entry ring buffer, WebSocket streaming to dashboard clients
+- **Single process** — Express server handles hooks, MCP, WebSocket, and static dashboard serving on one port
 
 ## Install
 
-Clone or download — there's nothing to install:
+### Web dashboard (full control plane)
 
 ```bash
-git clone https://github.com/blacklanternsecurity/agentsee.git
+git clone https://github.com/kevinoriley/agentsee.git
+cd agentsee
+npm install
+cd dashboard && npm install && cd ..
+npm run build
+```
+
+### Terminal dashboard (zero-dependency)
+
+```bash
+git clone https://github.com/kevinoriley/agentsee.git
+# No install needed — just run dashboard.sh
 ```
 
 ## Quick start
 
-Run from your Claude Code project directory:
+### Web dashboard
+
+From your Claude Code project directory:
 
 ```bash
-# Auto-discover agents (recommended)
-bash agentsee/dashboard.sh
+# Start the agentsee server
+cd /path/to/agentsee
+npm start
+
+# Open http://localhost:4900 in a browser
+```
+
+Then configure your Claude Code project to use agentsee hooks and MCP server (see [Configuration](#configuration) below).
+
+### Terminal dashboard
+
+```bash
+# From your Claude Code project directory
+bash /path/to/agentsee/dashboard.sh
 
 # Or directly
-python3 agentsee/tail-agent.py --dashboard --project-dir .
+python3 /path/to/agentsee/tail-agent.py --dashboard --project-dir .
 ```
 
-The dashboard starts with "Waiting for agents..." and picks up new agents automatically as they spawn. It discovers agents from two sources:
+## Configuration
 
-1. **Subagent JSONL transcripts** in `~/.claude/projects/<project>/*/subagents/`
-2. **Task output symlinks** in `/tmp/claude-<uid>/<project>/tasks/`
+### Hook scripts
 
-## Usage
+Add to your project's `.claude/settings.json`:
 
-### Dashboard mode (multi-agent)
-
-```bash
-# Auto-discover from project directory
-bash dashboard.sh
-
-# Explicit label:path pairs
-python3 tail-agent.py --dashboard web:path1 recon:path2
-
-# With project directory hint (when running from a different cwd)
-python3 tail-agent.py --dashboard --project-dir /path/to/project
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash /path/to/agentsee/hooks/agentsee-pre.sh"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash /path/to/agentsee/hooks/agentsee-post.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
 ```
 
-### Single-agent modes
+### MCP server
 
-```bash
-# One-shot: print formatted output and exit
-python3 tail-agent.py <output_file>
+Add to your project's `.mcp.json`:
 
-# Follow: live-tail like tail -f (Ctrl-C to stop)
-python3 tail-agent.py -f <output_file>
-
-# Pipe: read from stdin
-tail -f <output_file> | python3 tail-agent.py
+```json
+{
+  "mcpServers": {
+    "agentsee": {
+      "url": "http://localhost:4900/mcp"
+    }
+  }
+}
 ```
 
-### Purge agent history
+### Agent prompt
 
-Delete all agent transcripts for the current project:
+Add to your project's `CLAUDE.md` or shared agent prompt:
 
-```bash
-bash dashboard.sh --purge
+```
+If any tool call is rejected with an OPERATOR CHECKPOINT REQUIRED or OPERATOR INTERVENTION message, immediately call operator_checkpoint with a summary of your progress and intended next steps. Do not attempt other tools first.
 ```
 
-Prompts for confirmation before deleting.
+### Environment variables
 
-## Keybindings
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `AGENTSEE_PORT` | `4900` | Server port |
+| `AGENTSEE_URL` | `http://localhost:4900` | URL used by hook scripts |
+| `AGENTSEE_PROJECT_DIR` | cwd | Project directory for agent discovery |
 
-### Dashboard
+## API
+
+### Hook endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/hook/pre` | POST | PreToolUse check — allows or denies tool calls |
+| `/hook/post` | POST | PostToolUse logging (fire-and-forget) |
+
+### Agent management
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/agent/register` | POST | Register an agent with mode/threshold |
+| `/agent/status` | GET | Current state of all agents |
+| `/agent/:id/hold` | POST | Hold an agent |
+| `/agent/:id/release` | POST | Release a held agent |
+| `/agent/:id/threshold` | POST | Set turn threshold (`null` for autonomous) |
+| `/agent/:id/history` | GET | Chunked backward JSONL history from disk |
+
+### MCP tools
+
+| Tool | Behavior | Description |
+|------|----------|-------------|
+| `operator_checkpoint` | Blocking | Agent checks in; blocks until operator responds |
+| `operator_notify` | Non-blocking | Agent sends FYI; returns immediately |
+
+## Web dashboard keybindings
 
 | Key | Action |
 |-----|--------|
-| `Tab` | Switch to next pane |
-| `Shift-Tab` | Switch to previous pane |
-| `j` / `Down` | Scroll down |
-| `k` / `Up` | Scroll up |
-| `PgDn` | Page down |
-| `PgUp` | Page up |
-| `G` / `End` | Jump to bottom (resume live follow) |
-| `g` / `Home` | Jump to top |
-| `d` | Dismiss focused pane (double-tap within 2s to confirm) |
-| `b` | Open agent browser |
-| `q` / `Ctrl-C` | Quit |
+| `1-9` | Switch to tab 1-9 |
+| `Ctrl+T` | New tab |
+| `Tab` / `Shift+Tab` | Focus next/previous pane |
+| `f` | Maximize/restore focused pane |
+| `d` | Dismiss focused pane from tab |
+| `b` | Toggle agent browser sidebar |
+| `h` | Hold focused agent |
+| `r` | Release focused agent |
 
-### Agent browser
+## Terminal dashboard keybindings
 
 | Key | Action |
 |-----|--------|
-| `j` / `Down` | Move cursor down |
-| `k` / `Up` | Move cursor up |
-| `Space` / `Enter` | Toggle agent on/off dashboard |
-| `b` / `Escape` | Close browser |
+| `Tab` / `Shift-Tab` | Switch pane |
+| `j` / `k` | Scroll down/up |
+| `G` / `g` | Jump to bottom/top |
+| `d` | Dismiss pane |
+| `b` | Agent browser |
+| `q` | Quit |
 
 ## Color coding
 
 | Color | Category | Examples |
 |-------|----------|----------|
 | **Cyan** | Agent reasoning | Thinking, analysis, planning text |
-| **Yellow** (bold, `▶`) | Commands | `SHELL[sid] whoami`, `BASH ls -la`, `PROC evil-winrm` |
+| **Yellow** (bold) | Commands | `SHELL[sid] whoami`, `BASH ls -la`, `PROC evil-winrm` |
 | **Green** | Tool results | Command output, server responses |
-| **Dim** | Other tool calls | `SKILL get_skill(name)`, `STATE get_summary`, `READ path`, `BROWSER navigate(url)` |
-
-### Pane header indicators
-
-| Indicator | Meaning |
-|-----------|---------|
-| Spinner + time (e.g., `⠋ 12s`) | Agent is idle but recent |
-| Gold elapsed (≥30s) | Agent idle for a while |
-| Orange elapsed (≥60s) | Agent may be stalled |
-| Red `idle 2m` (≥120s) | Agent likely finished or dead |
-
-## Output format
-
-The dashboard parses JSONL lines with `"type":"assistant"` and formats tool calls as compact one-liners:
-
-| Format | Source |
-|--------|--------|
-| `SHELL[sid] command` | Shell send_command |
-| `LISTEN port=N label=X` | Shell start_listener |
-| `PROC command` | Shell start_process |
-| `BASH (description) command` | Bash tool |
-| `SKILL get_skill(name)` | Skill router |
-| `STATE get_summary` | State server |
-| `BROWSER navigate(url=...)` | Browser automation |
-| `READ` / `WRITE` / `EDIT` / `GREP` / `GLOB` | Built-in file tools |
+| **Dim** | Other tool calls | `SKILL get_skill(name)`, `STATE get_summary`, `READ path` |
 
 ## How it works
 
-Claude Code stores agent transcripts as JSONL files under `~/.claude/projects/`. Each line is a JSON object representing a conversation turn — user messages, assistant responses with text and tool calls, and tool results.
+Claude Code stores agent transcripts as JSONL files under `~/.claude/projects/`. Each line is a JSON object representing a conversation turn.
 
-agentsee polls these directories for new files, parses the JSONL in real time, and renders a formatted view. It extracts labels from agent prompts (skill names, agent types) and tracks file modification times to detect idle/completed agents.
+**Terminal dashboard** — Polls these directories, parses JSONL, renders formatted curses output.
+
+**Web dashboard** — Same JSONL parsing, plus:
+1. PreToolUse hooks call agentsee before every tool. If the agent is held or over its turn threshold, the hook denies the tool call with a message directing the agent to call `operator_checkpoint`.
+2. The agent calls `operator_checkpoint` via MCP. This blocks the agent's execution until the operator responds through the web dashboard.
+3. The operator sees the agent's summary, types a response, and the agent resumes with the operator's message as a tool result in its context.
 
 ## License
 
