@@ -1,0 +1,30 @@
+{
+  "name": "agentsee",
+  "version": "0.1.0",
+  "description": "Agent operator control plane for Claude Code subagents",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "agentsee": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc && cd dashboard && npx vite build",
+    "build:server": "tsc",
+    "build:dashboard": "cd dashboard && npx vite build",
+    "dev": "tsc && node dist/index.js",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "express": "^4.21.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.10.0",
+    "@types/ws": "^8.5.13",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  },
+  "license": "GPL-3.0"
+}

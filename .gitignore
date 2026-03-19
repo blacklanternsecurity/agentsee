@@ -1,2 +1,6 @@
 __pycache__/
 *.pyc
+node_modules/
+dist/
+.claude/
+.mcp.json
