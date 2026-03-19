@@ -4,7 +4,9 @@ Operator control plane for [Claude Code](https://docs.anthropic.com/en/docs/clau
 
 Works standalone with any Claude Code project that uses subagents. Also the intended control plane for [red-run](https://github.com/blacklanternsecurity/red-run).
 
-![agentsee dashboard](screenshot.jpeg)
+![agentsee dashboard](assets/screenshot.jpeg)
+
+🔵 Agent reasoning &nbsp;&nbsp; 🟡 Shell/Bash commands &nbsp;&nbsp; 🟢 Tool output &nbsp;&nbsp; ⚪ Other tool calls
 
 ## What it does
 
