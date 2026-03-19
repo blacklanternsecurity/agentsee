@@ -20,7 +20,7 @@ agentsee gives you a web dashboard where you can watch all your Claude Code agen
 - **Leash** agents — make them check in with you every N tool calls
 - **Release** agents to run freely again
 
-Without agentsee, you launch agents and hope for the best. With agentsee, you're in the loop.
+Without agentsee, you launch agents and hope for the best. With agentsee, you gain some agency over your agents.
 
 ## How it works
 
