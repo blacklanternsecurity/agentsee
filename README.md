@@ -139,7 +139,7 @@ The dashboard uses a **tab + pane** layout. Tabs are workspaces. Each tab contai
 - **4 agents** = 2x2 grid
 - More agents keep tiling
 
-Create tabs to organize agents by task — one tab for recon, another for exploitation, etc. Agents can be moved between tabs using the agent browser.
+Create tabs to organize agents by task — group related agents together and switch between workspaces. Agents can be moved between tabs using the agent browser.
 
 ### Agent panes
 
