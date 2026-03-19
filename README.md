@@ -6,7 +6,7 @@ Operator control plane for [Claude Code](https://docs.anthropic.com/en/docs/clau
 
 Works standalone with any Claude Code project that uses subagents. Also the intended control plane for [red-run](https://github.com/blacklanternsecurity/red-run).
 
-![agentsee dashboard](assets/screenshot.jpeg)
+![agentsee dashboard](assets/agentsee.png)
 
 🔵 Agent reasoning &nbsp;&nbsp; 🟡 Shell/Bash commands &nbsp;&nbsp; 🟢 Tool output &nbsp;&nbsp; ⚪ Other tool calls
 
@@ -191,6 +191,8 @@ Type your response and choose:
 
 - **Send + Release** — your message is delivered and the agent runs freely
 - **Send + Keep held** (check "Request response") — your message is delivered but the agent stays held. After its next tool call, it checks in again. Use this for back-and-forth conversation.
+
+![chat](assets/chat.png)
 
 The chat icon stays on the pane header after a conversation. Click it anytime to review the history or continue the conversation.
 
