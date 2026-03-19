@@ -1,5 +1,5 @@
 import { FileTailer, serializeEntry } from "./file-tailer.js";
-import { discoverAgents } from "./discovery.js";
+import { discoverAgents, purgeAgent } from "./discovery.js";
 import { readHistoryChunk } from "./history.js";
 import { AgentStore } from "../state/agent-store.js";
 import { broadcast } from "../dashboard/ws-events.js";
@@ -112,6 +112,23 @@ export class TailerManager {
     }
   }
 
+  /** Permanently remove an agent — stops tailer, deletes JSONL from disk, removes from state. */
+  async removeAgent(agentId: string): Promise<void> {
+    const tailer = this.tailers.get(agentId);
+    if (tailer) {
+      tailer.stop();
+      await purgeAgent(tailer.filePath);
+      this.tailers.delete(agentId);
+    }
+    this.store.remove(agentId);
+
+    broadcast(this.wss, {
+      type: "agent:removed",
+      agent_id: agentId,
+      data: {},
+    });
+  }
+
   getTailer(agentId: string): FileTailer | undefined {
     return this.tailers.get(agentId);
   }
@@ -129,6 +146,12 @@ export class TailerManager {
 /** Express router for history endpoint. */
 export function createHistoryRouter(manager: TailerManager): Router {
   const router = Router();
+
+  router.delete("/agent/:agent_id", async (req: Request, res: Response) => {
+    const { agent_id } = req.params;
+    await manager.removeAgent(agent_id);
+    res.json({ ok: true });
+  });
 
   router.get("/agent/:agent_id/history", async (req: Request, res: Response) => {
     const { agent_id } = req.params;

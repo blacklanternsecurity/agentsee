@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import type { Tab, AgentInfo, StreamEntry, CheckinData } from "../types";
+import type { ChatMessage } from "../components/ChatPanel";
 
 const STORAGE_KEY = "agentsee-workspace";
 
@@ -35,6 +36,19 @@ export function useWorkspace() {
 
   const activeTab = tabs.find((t) => t.id === activeTabId) ?? tabs[0];
 
+  // Remove agent IDs from tabs that no longer exist on the server
+  const cleanStaleTabs = useCallback(
+    (validIds: Set<string>) => {
+      updateTabs((tabs) =>
+        tabs.map((t) => ({
+          ...t,
+          agentIds: t.agentIds.filter((id) => validIds.has(id)),
+        }))
+      );
+    },
+    [updateTabs]
+  );
+
   // Agent management
   const updateAgent = useCallback((id: string, patch: Partial<AgentInfo>) => {
     setAgents((prev) => {
@@ -47,16 +61,41 @@ export function useWorkspace() {
   const registerAgent = useCallback(
     (agent: AgentInfo) => {
       setAgents((prev) => ({ ...prev, [agent.agent_id]: agent }));
-      // Auto-add to "All" tab if it exists
-      updateTabs((tabs) =>
-        tabs.map((t) =>
-          t.id === "all" && !t.agentIds.includes(agent.agent_id)
+      // Auto-add to first tab if not in any tab
+      updateTabs((tabs) => {
+        const inAnyTab = tabs.some((t) => t.agentIds.includes(agent.agent_id));
+        if (inAnyTab) return tabs;
+        // Add to first tab
+        return tabs.map((t, i) =>
+          i === 0
             ? { ...t, agentIds: [...t.agentIds, agent.agent_id] }
             : t
-        )
-      );
+        );
+      });
     },
     [updateTabs]
+  );
+
+  const removeAgent = useCallback(
+    (agentId: string) => {
+      setAgents((prev) => {
+        const { [agentId]: _, ...rest } = prev;
+        return rest;
+      });
+      setStreams((prev) => {
+        const { [agentId]: _, ...rest } = prev;
+        return rest;
+      });
+      // Remove from all tabs
+      updateTabs((tabs) =>
+        tabs.map((t) => ({
+          ...t,
+          agentIds: t.agentIds.filter((id) => id !== agentId),
+        }))
+      );
+      if (maximizedAgent === agentId) setMaximizedAgent(null);
+    },
+    [updateTabs, maximizedAgent]
   );
 
   // Tab management
@@ -159,7 +198,9 @@ export function useWorkspace() {
     []
   );
 
-  // Checkin management
+  // Checkin + chat history management
+  const [chatHistories, setChatHistories] = useState<Record<string, ChatMessage[]>>({});
+
   const setCheckin = useCallback(
     (agentId: string, data: CheckinData | null) => {
       setCheckins((prev) => {
@@ -169,6 +210,16 @@ export function useWorkspace() {
         }
         return { ...prev, [agentId]: data };
       });
+    },
+    []
+  );
+
+  const addChatMessage = useCallback(
+    (agentId: string, msg: ChatMessage) => {
+      setChatHistories((prev) => ({
+        ...prev,
+        [agentId]: [...(prev[agentId] ?? []), msg],
+      }));
     },
     []
   );
@@ -186,12 +237,16 @@ export function useWorkspace() {
     agents,
     registerAgent,
     updateAgent,
+    removeAgent,
+    cleanStaleTabs,
     streams,
     appendStream,
     setStreamHistory,
     prependStreamHistory,
     checkins,
     setCheckin,
+    chatHistories,
+    addChatMessage,
     maximizedAgent,
     setMaximizedAgent,
   };

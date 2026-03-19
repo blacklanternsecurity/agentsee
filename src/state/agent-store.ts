@@ -63,6 +63,9 @@ export class AgentStore {
       if (transcript_path && !state.transcript_path) {
         state.transcript_path = transcript_path;
       }
+      if (agent_type && state.agent_type === "unknown") {
+        state.agent_type = agent_type;
+      }
     }
     return state;
   }
@@ -72,6 +75,10 @@ export class AgentStore {
     if (!state) return false;
     state.status = "held";
     return true;
+  }
+
+  remove(agent_id: string): boolean {
+    return this.agents.delete(agent_id);
   }
 
   release(agent_id: string): boolean {
@@ -87,6 +94,7 @@ export class AgentStore {
     const state = this.agents.get(agent_id);
     if (!state) return false;
     state.turn_threshold = threshold;
+    state.turn_count = 0;
     state.mode = threshold === null ? "autonomous" : "supervised";
     return true;
   }
@@ -111,6 +119,19 @@ export class AgentStore {
     state.turn_count++;
     state.last_activity = new Date();
     return state.turn_count;
+  }
+
+  /** Find an agent by type name (e.g. "ad-discovery-agent"). Returns the most recently active match. */
+  findByType(agentType: string): AgentState | undefined {
+    let best: AgentState | undefined;
+    for (const state of this.agents.values()) {
+      if (state.agent_type === agentType) {
+        if (!best || state.last_activity > best.last_activity) {
+          best = state;
+        }
+      }
+    }
+    return best;
   }
 
   all(): AgentState[] {

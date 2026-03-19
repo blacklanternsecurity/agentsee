@@ -3,12 +3,13 @@ import type { AgentInfo, StreamEntry, WsMessage } from "../types";
 
 interface UseWebSocketOptions {
   onInit: (agents: Record<string, AgentInfo>) => void;
-  onAgentRegistered: (agent: AgentInfo) => void;
+  onAgentRegistered: (agentId: string, data: Record<string, any>) => void;
   onAgentStatus: (agentId: string, data: Record<string, any>) => void;
   onStream: (agentId: string, entry: StreamEntry) => void;
   onHistory: (agentId: string, entries: StreamEntry[]) => void;
   onCheckin: (agentId: string, data: { summary: string; question?: string }) => void;
   onNotify: (agentId: string, message: string) => void;
+  onRemoved: (agentId: string) => void;
 }
 
 export function useWebSocket(opts: UseWebSocketOptions) {
@@ -36,9 +37,12 @@ export function useWebSocket(opts: UseWebSocketOptions) {
           o.onInit(msg.data.agents as Record<string, AgentInfo>);
           break;
         case "agent:registered":
-          o.onAgentRegistered(msg.data as unknown as AgentInfo);
+          o.onAgentRegistered(msg.agent_id, msg.data);
           break;
         case "agent:status":
+        case "agent:tool_start":
+        case "agent:tool_done":
+        case "agent:blocked":
           o.onAgentStatus(msg.agent_id, msg.data);
           break;
         case "agent:stream":
@@ -52,6 +56,9 @@ export function useWebSocket(opts: UseWebSocketOptions) {
           break;
         case "agent:notify":
           o.onNotify(msg.agent_id, msg.data.message as string);
+          break;
+        case "agent:removed":
+          o.onRemoved(msg.agent_id);
           break;
       }
     };

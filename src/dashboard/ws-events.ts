@@ -81,14 +81,15 @@ export function setupWsHandlers(
           const state = store.get(msg.agent_id);
           if (state?.pending_checkin) {
             const response = String(msg.data.message ?? "Continue.");
+            const release = msg.data.release !== false; // default: release
             state.pending_checkin.resolve(response);
             state.pending_checkin = null;
-            state.status = "running";
+            state.status = release ? "running" : "held";
             store.resetTurnCount(msg.agent_id);
             broadcast(wss, {
               type: "agent:status",
               agent_id: msg.agent_id,
-              data: { status: "running" },
+              data: { status: state.status },
             });
           }
           break;
@@ -100,6 +101,10 @@ export function setupWsHandlers(
 
         case "agent:unsubscribe":
           tailerManager?.unsubscribe(msg.agent_id, ws);
+          break;
+
+        case "agent:remove":
+          tailerManager?.removeAgent(msg.agent_id);
           break;
       }
     });

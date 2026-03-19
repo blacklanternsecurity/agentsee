@@ -12,7 +12,7 @@ import { setupWsHandlers } from "./dashboard/ws-events.js";
 import { TailerManager, createHistoryRouter } from "./tailer/manager.js";
 
 const PORT = parseInt(process.env.AGENTSEE_PORT ?? "4900", 10);
-const PROJECT_DIR = process.env.AGENTSEE_PROJECT_DIR ?? process.cwd();
+const PROJECT_DIR = process.env.AGENTSEE_PROJECT_DIR ?? "";
 
 const app = express();
 app.use(express.json());
@@ -81,5 +81,5 @@ server.listen(PORT, () => {
   console.log(`  MCP server:     http://localhost:${PORT}/mcp`);
   console.log(`  History:        http://localhost:${PORT}/agent/:id/history`);
   console.log(`  WebSocket:      ws://localhost:${PORT}`);
-  console.log(`  Project dir:    ${PROJECT_DIR}`);
+  console.log(`  Project dir:    ${PROJECT_DIR || "(all projects)"}`);
 });

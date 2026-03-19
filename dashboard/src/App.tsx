@@ -19,10 +19,13 @@ export function App() {
 
   const { send } = useWebSocket({
     onInit: (agents) => {
+      // Clean stale agent IDs from tabs (leftover from previous sessions)
+      const validIds = new Set(Object.keys(agents));
+      ws.cleanStaleTabs(validIds);
+
       for (const agent of Object.values(agents)) {
         ws.registerAgent(agent);
       }
-      // Subscribe to all known agents
       for (const id of Object.keys(agents)) {
         send({
           type: "agent:subscribe",
@@ -31,24 +34,23 @@ export function App() {
         });
       }
     },
-    onAgentRegistered: (data) => {
+    onAgentRegistered: (agentId, data) => {
       const agent: AgentInfo = {
-        agent_id: data.agent_id ?? (data as any).agent_id,
-        session_id: (data as any).session_id ?? "",
-        agent_type: (data as any).agent_type ?? "unknown",
-        task_description: (data as any).task_description ?? (data as any).label ?? "",
-        mode: (data as any).mode ?? "autonomous",
+        agent_id: agentId,
+        session_id: data.session_id ?? "",
+        agent_type: data.agent_type ?? "unknown",
+        task_description: data.task_description ?? data.label ?? "",
+        mode: data.mode ?? "autonomous",
         status: "running",
         turn_count: 0,
-        turn_threshold: (data as any).turn_threshold ?? null,
-        transcript_path: (data as any).transcript_path ?? (data as any).filePath ?? null,
+        turn_threshold: data.turn_threshold ?? null,
+        transcript_path: data.transcript_path ?? data.filePath ?? null,
         has_pending_checkin: false,
         registered_at: new Date().toISOString(),
         last_activity: new Date().toISOString(),
       };
       ws.registerAgent(agent);
-      // Auto-subscribe to new agents
-      send({ type: "agent:subscribe", agent_id: agent.agent_id, data: {} });
+      send({ type: "agent:subscribe", agent_id: agentId, data: {} });
     },
     onAgentStatus: (agentId, data) => {
       ws.updateAgent(agentId, data as Partial<AgentInfo>);
@@ -69,25 +71,44 @@ export function App() {
     onCheckin: (agentId, data) => {
       ws.setCheckin(agentId, data);
       ws.updateAgent(agentId, { status: "checking_in", has_pending_checkin: true });
-      // Auto-open chat if agent is in current tab
-      if (ws.activeTab.agentIds.includes(agentId)) {
-        setChatAgentId(agentId);
-      }
+      // Record agent message in chat history
+      ws.addChatMessage(agentId, {
+        from: "agent",
+        text: data.summary,
+        question: data.question,
+        timestamp: new Date(),
+      });
+      // Auto-open chat
+      setChatAgentId(agentId);
     },
     onNotify: (_agentId, _message) => {
       // Could show a toast notification here
     },
+    onRemoved: (agentId) => {
+      ws.removeAgent(agentId);
+    },
   });
 
   const handleRespond = useCallback(
-    (agentId: string, message: string) => {
+    (agentId: string, message: string, keepHeld: boolean) => {
+      ws.addChatMessage(agentId, {
+        from: "operator",
+        text: message,
+        timestamp: new Date(),
+      });
+
+      const appendedMessage = keepHeld
+        ? message + "\n\n[After completing this, check in again with operator_checkpoint before proceeding further.]"
+        : message;
+
       send({
         type: "agent:respond",
         agent_id: agentId,
-        data: { message },
+        data: { message: appendedMessage, release: !keepHeld },
       });
+
       ws.setCheckin(agentId, null);
-      setChatAgentId(null);
+      if (!keepHeld) setChatAgentId(null);
     },
     [send, ws]
   );
@@ -165,7 +186,6 @@ export function App() {
 
   useKeyBindings(keyActions);
 
-  const chatCheckin = chatAgentId ? ws.checkins[chatAgentId] : null;
 
   return (
     <div style={s.root}>
@@ -176,6 +196,8 @@ export function App() {
         onCreate={() => ws.createTab()}
         onRename={ws.renameTab}
         onClose={ws.closeTab}
+        onToggleBrowser={() => setBrowserOpen((v) => !v)}
+        agentCount={Object.keys(ws.agents).length}
       />
 
       <PaneGrid
@@ -193,6 +215,7 @@ export function App() {
         onSetThreshold={handleSetThreshold}
         onScrollTop={handleScrollTop}
         onOpenChat={setChatAgentId}
+        chatHistories={ws.chatHistories}
       />
 
       {browserOpen && (
@@ -206,14 +229,18 @@ export function App() {
               ws.addAgentToTab(ws.activeTab.id, id);
             }
           }}
+          onRemove={(id) => {
+            send({ type: "agent:remove", agent_id: id, data: {} });
+          }}
           onClose={() => setBrowserOpen(false)}
         />
       )}
 
-      {chatAgentId && chatCheckin && (
+      {chatAgentId && (
         <ChatPanel
           agentId={chatAgentId}
-          checkin={chatCheckin}
+          checkin={ws.checkins[chatAgentId] ?? null}
+          history={ws.chatHistories[chatAgentId] ?? []}
           onRespond={handleRespond}
           onClose={() => setChatAgentId(null)}
         />

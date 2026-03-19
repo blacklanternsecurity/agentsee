@@ -35,23 +35,36 @@ export function createMcpRouter(store: AgentStore, wss: WebSocketServer): Router
           .describe("Specific question for the operator, if any"),
       },
       async ({ agent_id, summary, question }) => {
-        const state = store.get(agent_id);
+        // Try exact match first, then normalized, then match by agent type
+        let state = store.get(agent_id);
+        let resolvedId = agent_id;
+
         if (!state) {
-          return {
-            content: [
-              {
-                type: "text" as const,
-                text: "Error: agent not registered. Continue with your task.",
-              },
-            ],
-          };
+          const normalizedId = agent_id.startsWith("agent-") ? agent_id : `agent-${agent_id}`;
+          state = store.get(normalizedId);
+          if (state) resolvedId = normalizedId;
+        }
+
+        if (!state) {
+          // Agent might have passed its type name instead of instance ID
+          const byType = store.findByType(agent_id);
+          if (byType) {
+            state = byType;
+            resolvedId = byType.agent_id;
+          }
+        }
+
+        if (!state) {
+          const normalizedId = agent_id.startsWith("agent-") ? agent_id : `agent-${agent_id}`;
+          state = store.getOrAutoRegister(normalizedId, "", undefined, undefined);
+          resolvedId = normalizedId;
         }
 
         state.status = "checking_in";
 
         broadcast(wss, {
           type: "agent:checkin",
-          agent_id,
+          agent_id: resolvedId,
           data: { summary, question },
         });
 
@@ -60,16 +73,10 @@ export function createMcpRouter(store: AgentStore, wss: WebSocketServer): Router
           state.pending_checkin = { summary, question, resolve };
         });
 
-        // Operator responded — reset turn count, resume
-        state.status = "running";
+        // Operator responded — status was set by the ws-events respond handler
+        // (either "running" if released, or "held" if kept held)
         state.turn_count = 0;
         state.pending_checkin = null;
-
-        broadcast(wss, {
-          type: "agent:status",
-          agent_id,
-          data: { status: "running" },
-        });
 
         return {
           content: [{ type: "text" as const, text: response }],
@@ -85,14 +92,22 @@ export function createMcpRouter(store: AgentStore, wss: WebSocketServer): Router
         message: z.string().describe("Status update, finding, or note"),
       },
       async ({ agent_id, message }) => {
-        const state = store.get(agent_id);
-        if (state) {
-          state.last_activity = new Date();
+        let state = store.get(agent_id);
+        let resolvedId = agent_id;
+        if (!state) {
+          const n = agent_id.startsWith("agent-") ? agent_id : `agent-${agent_id}`;
+          state = store.get(n);
+          if (state) resolvedId = n;
         }
+        if (!state) {
+          const byType = store.findByType(agent_id);
+          if (byType) { state = byType; resolvedId = byType.agent_id; }
+        }
+        if (state) state.last_activity = new Date();
 
         broadcast(wss, {
           type: "agent:notify",
-          agent_id,
+          agent_id: resolvedId,
           data: { message },
         });
 

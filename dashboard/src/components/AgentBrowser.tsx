@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { ModeBadge } from "./ModeBadge";
 import type { AgentInfo } from "../types";
 
@@ -5,6 +6,7 @@ interface Props {
   agents: Record<string, AgentInfo>;
   currentTabAgents: string[];
   onToggle: (agentId: string) => void;
+  onRemove: (agentId: string) => void;
   onClose: () => void;
 }
 
@@ -12,11 +14,14 @@ export function AgentBrowser({
   agents,
   currentTabAgents,
   onToggle,
+  onRemove,
   onClose,
 }: Props) {
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+
   const sorted = Object.values(agents).sort(
     (a, b) =>
-      new Date(b.last_activity).getTime() - new Date(a.last_activity).getTime()
+      new Date(b.registered_at).getTime() - new Date(a.registered_at).getTime()
   );
 
   return (
@@ -39,31 +44,67 @@ export function AgentBrowser({
               idle < 60000
                 ? `${Math.floor(idle / 1000)}s`
                 : `${Math.floor(idle / 60000)}m`;
+            const confirming = confirmId === agent.agent_id;
 
             return (
-              <div
-                key={agent.agent_id}
-                style={{
-                  ...s.item,
-                  ...(inTab ? s.itemActive : {}),
-                }}
-                onClick={() => onToggle(agent.agent_id)}
-              >
-                <div style={s.itemLeft}>
-                  <input
-                    type="checkbox"
-                    checked={inTab}
-                    readOnly
-                    style={{ cursor: "pointer" }}
-                  />
-                  <span style={s.itemLabel}>
-                    {agent.task_description || agent.agent_type || agent.agent_id}
-                  </span>
+              <div key={agent.agent_id}>
+                <div
+                  style={{
+                    ...s.item,
+                    ...(inTab ? s.itemActive : {}),
+                  }}
+                  onClick={() => onToggle(agent.agent_id)}
+                >
+                  <div style={s.itemLeft}>
+                    <input
+                      type="checkbox"
+                      checked={inTab}
+                      readOnly
+                      style={{ cursor: "pointer" }}
+                    />
+                    <span style={s.itemLabel}>
+                      {agent.task_description || agent.agent_type || agent.agent_id}
+                    </span>
+                  </div>
+                  <div style={s.itemRight}>
+                    <ModeBadge mode={agent.mode} status={agent.status} />
+                    <span style={s.idle}>{idleStr}</span>
+                    <button
+                      style={s.purgeBtn}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setConfirmId(confirming ? null : agent.agent_id);
+                      }}
+                      title="Delete agent transcript"
+                    >
+                      Purge
+                    </button>
+                  </div>
                 </div>
-                <div style={s.itemRight}>
-                  <ModeBadge mode={agent.mode} status={agent.status} />
-                  <span style={s.idle}>{idleStr}</span>
-                </div>
+                {confirming && (
+                  <div style={s.confirm}>
+                    <span style={s.confirmText}>
+                      Delete transcript from disk. Not recoverable.
+                    </span>
+                    <div style={s.confirmBtns}>
+                      <button
+                        style={s.confirmNo}
+                        onClick={() => setConfirmId(null)}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        style={s.confirmYes}
+                        onClick={() => {
+                          onRemove(agent.agent_id);
+                          setConfirmId(null);
+                        }}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })}
@@ -157,6 +198,57 @@ const s: Record<string, React.CSSProperties> = {
     color: "#484f58",
     width: 30,
     textAlign: "right",
+  },
+  purgeBtn: {
+    background: "none",
+    border: "1px solid #30363d",
+    color: "#484f58",
+    fontSize: 10,
+    padding: "1px 6px",
+    borderRadius: 3,
+    cursor: "pointer",
+    fontFamily: "inherit",
+  },
+  confirm: {
+    background: "#1c1210",
+    border: "1px solid #da3633",
+    borderTop: "none",
+    padding: "6px 12px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  confirmText: {
+    color: "#f85149",
+    fontSize: 11,
+    lineHeight: 1.4,
+  },
+  confirmBtns: {
+    display: "flex",
+    gap: 6,
+    flexShrink: 0,
+  },
+  confirmYes: {
+    background: "#da3633",
+    border: "none",
+    color: "#fff",
+    fontSize: 11,
+    padding: "3px 12px",
+    borderRadius: 3,
+    cursor: "pointer",
+    fontFamily: "inherit",
+    fontWeight: 600,
+  },
+  confirmNo: {
+    background: "#21262d",
+    border: "1px solid #30363d",
+    color: "#c9d1d9",
+    fontSize: 11,
+    padding: "3px 12px",
+    borderRadius: 3,
+    cursor: "pointer",
+    fontFamily: "inherit",
   },
   footer: {
     padding: "6px 12px",

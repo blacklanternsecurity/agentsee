@@ -12,6 +12,8 @@ import type { WebSocketServer } from "ws";
 const CHECKPOINT_TOOLS = new Set([
   "operator_checkpoint",
   "operator_notify",
+  "mcp__agentsee__operator_checkpoint",
+  "mcp__agentsee__operator_notify",
 ]);
 
 export function createHookRouter(store: AgentStore, wss: WebSocketServer): Router {
@@ -19,7 +21,7 @@ export function createHookRouter(store: AgentStore, wss: WebSocketServer): Route
 
   router.post("/hook/pre", (req: Request, res: Response) => {
     const body = req.body as HookPreRequest;
-    const agent_id = body.agent_id ?? body.session_id;
+    const agent_id = normalizeAgentId(body.agent_id, body.session_id);
     const state = store.getOrAutoRegister(
       agent_id,
       body.session_id,
@@ -40,8 +42,8 @@ export function createHookRouter(store: AgentStore, wss: WebSocketServer): Route
         allow: false,
         reason:
           "OPERATOR INTERVENTION: You have been held by the operator. " +
-          "Call operator_checkpoint immediately with a summary of your progress " +
-          "and intended next steps. Do not attempt other tools first.",
+          "Call the mcp__agentsee__operator_checkpoint tool immediately with your agent_id, " +
+          "a summary of your progress, and intended next steps. Do not attempt other tools first.",
       };
       broadcast(wss, {
         type: "agent:blocked",
@@ -61,8 +63,8 @@ export function createHookRouter(store: AgentStore, wss: WebSocketServer): Route
         allow: false,
         reason:
           "OPERATOR CHECKPOINT REQUIRED: You have reached your tool call limit. " +
-          "Call operator_checkpoint immediately with a summary of your progress " +
-          "and intended next steps. Do not attempt other tools first.",
+          "Call the mcp__agentsee__operator_checkpoint tool immediately with your agent_id, " +
+          "a summary of your progress, and intended next steps. Do not attempt other tools first.",
       };
       broadcast(wss, {
         type: "agent:blocked",
@@ -92,7 +94,7 @@ export function createHookRouter(store: AgentStore, wss: WebSocketServer): Route
 
   router.post("/hook/post", (req: Request, res: Response) => {
     const body = req.body as HookPostRequest;
-    const agent_id = body.agent_id ?? body.session_id;
+    const agent_id = normalizeAgentId(body.agent_id, body.session_id);
 
     // Touch last_activity
     const state = store.getOrAutoRegister(
@@ -181,6 +183,18 @@ export function createHookRouter(store: AgentStore, wss: WebSocketServer): Route
   });
 
   return router;
+}
+
+/**
+ * Normalize agent ID to match JSONL filename format.
+ * Hook events send bare IDs like "a3c83ab8eab186dce" but
+ * JSONL filenames are "agent-a3c83ab8eab186dce.jsonl".
+ * Discovery registers agents with the "agent-" prefix.
+ */
+function normalizeAgentId(agentId?: string, sessionId?: string): string {
+  const raw = agentId ?? sessionId ?? "unknown";
+  if (raw.startsWith("agent-")) return raw;
+  return `agent-${raw}`;
 }
 
 function summarizeToolInput(

@@ -8,6 +8,8 @@ interface Props {
   onCreate: () => void;
   onRename: (id: string, name: string) => void;
   onClose: (id: string) => void;
+  onToggleBrowser: () => void;
+  agentCount: number;
 }
 
 export function TabBar({
@@ -17,6 +19,8 @@ export function TabBar({
   onCreate,
   onRename,
   onClose,
+  onToggleBrowser,
+  agentCount,
 }: Props) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
@@ -80,6 +84,12 @@ export function TabBar({
       <button style={s.addBtn} onClick={onCreate}>
         +
       </button>
+      <div style={s.spacer} />
+      <button style={s.agentsBtn} onClick={onToggleBrowser}>
+        <span style={s.shortcut}>b</span>
+        Agents
+        <span style={s.count}>{agentCount}</span>
+      </button>
     </div>
   );
 }
@@ -141,6 +151,32 @@ const s: Record<string, React.CSSProperties> = {
     padding: "2px 8px",
     borderRadius: 4,
     marginLeft: 4,
+  },
+  spacer: {
+    flex: 1,
+  },
+  shortcut: {
+    background: "#21262d",
+    border: "1px solid #30363d",
+    borderRadius: 3,
+    padding: "0 4px",
+    fontSize: 10,
+    color: "#484f58",
+    lineHeight: "16px",
+  },
+  agentsBtn: {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    background: "none",
+    border: "1px solid #30363d",
+    color: "#8b949e",
+    cursor: "pointer",
+    fontSize: 12,
+    padding: "2px 10px",
+    borderRadius: 4,
+    fontFamily: "inherit",
+    marginRight: 4,
   },
   input: {
     background: "#0d1117",

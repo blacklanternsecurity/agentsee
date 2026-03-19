@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { ModeBadge } from "./ModeBadge";
 import { AgentStream } from "./AgentStream";
 import type { AgentInfo, StreamEntry } from "../types";
@@ -9,11 +10,13 @@ interface Props {
   onFocus: () => void;
   onDismiss: () => void;
   onMaximize: () => void;
+  maximized: boolean;
   onHold: () => void;
   onRelease: () => void;
   onSetThreshold: (t: number | null) => void;
   onScrollTop: () => void;
   hasCheckin: boolean;
+  hasChatHistory: boolean;
   onOpenChat: () => void;
 }
 
@@ -37,14 +40,22 @@ export function AgentPane({
   onFocus,
   onDismiss,
   onMaximize,
+  maximized,
   onHold,
   onRelease,
   onSetThreshold,
   onScrollTop,
   hasCheckin,
+  hasChatHistory,
   onOpenChat,
 }: Props) {
-  const idle = Date.now() - new Date(agent.last_activity).getTime();
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const idle = now - new Date(agent.last_activity).getTime();
 
   return (
     <div
@@ -62,22 +73,26 @@ export function AgentPane({
       {/* Header */}
       <div style={s.header} onDoubleClick={onMaximize}>
         <div style={s.headerLeft}>
+          <button
+            style={s.expandBtn}
+            onClick={(e) => { e.stopPropagation(); onMaximize(); }}
+            title={maximized ? "Restore panes" : "Maximize pane"}
+          >
+            {maximized ? "⤡" : "⤢"}
+          </button>
           <span style={s.label}>
             {agent.task_description || agent.agent_type || agent.agent_id}
           </span>
           <ModeBadge mode={agent.mode} status={agent.status} />
-          {agent.turn_threshold !== null && (
-            <span style={s.turns}>
-              {agent.turn_count}/{agent.turn_threshold}
-            </span>
-          )}
         </div>
         <div style={s.headerRight}>
-          <span style={{ color: idleColor(idle), fontSize: 10 }}>
-            {formatIdle(idle)}
-          </span>
-          {hasCheckin && (
-            <button style={s.chatBtn} onClick={onOpenChat}>
+          <IdleIndicator idle={idle} />
+          {(hasCheckin || hasChatHistory) && (
+            <button
+              style={{ ...s.chatBtn, ...(hasCheckin ? s.chatBtnActive : {}) }}
+              onClick={onOpenChat}
+              title="Open chat"
+            >
               💬
             </button>
           )}
@@ -90,20 +105,11 @@ export function AgentPane({
               Hold
             </button>
           )}
-          <select
-            style={s.select}
-            value={agent.turn_threshold ?? "auto"}
-            onChange={(e) => {
-              const v = e.target.value;
-              onSetThreshold(v === "auto" ? null : parseInt(v, 10));
-            }}
-          >
-            <option value="auto">Auto</option>
-            <option value="1">Every 1</option>
-            <option value="3">Every 3</option>
-            <option value="5">Every 5</option>
-            <option value="10">Every 10</option>
-          </select>
+          <ThresholdControl
+            value={agent.turn_threshold}
+            turnCount={agent.turn_count}
+            onChange={onSetThreshold}
+          />
           <button style={s.dismissBtn} onClick={onDismiss}>
             ×
           </button>
@@ -115,6 +121,139 @@ export function AgentPane({
     </div>
   );
 }
+
+const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+
+function IdleIndicator({ idle }: { idle: number }) {
+  const showSpinner = idle >= 5_000 && idle < 300_000; // 5s to 5min
+  const frame = SPINNER_FRAMES[Math.floor(Date.now() / 100) % SPINNER_FRAMES.length];
+  const color = idleColor(idle);
+
+  return (
+    <span style={{ color, fontSize: 10, fontFamily: "inherit" }}>
+      {showSpinner && <span style={{ marginRight: 3 }}>{frame}</span>}
+      {formatIdle(idle)}
+    </span>
+  );
+}
+
+function ThresholdControl({
+  value,
+  turnCount,
+  onChange,
+}: {
+  value: number | null;
+  turnCount: number;
+  onChange: (t: number | null) => void;
+}) {
+  const isAuto = value === null;
+  const [draft, setDraft] = useState(String(value ?? ""));
+
+  useEffect(() => {
+    setDraft(value === null ? "" : String(value));
+  }, [value]);
+
+  const apply = () => {
+    const n = parseInt(draft, 10);
+    if (n > 0) {
+      onChange(n);
+    } else {
+      setDraft(value === null ? "" : String(value));
+    }
+  };
+
+  const remaining = value !== null ? Math.max(0, value - turnCount) : null;
+
+  return (
+    <div style={tc.wrapper}>
+      <button
+        style={{ ...tc.modeBtn, ...(isAuto ? tc.modeBtnActive : {}) }}
+        onClick={() => onChange(null)}
+        title="Autonomous — no automatic check-ins"
+      >
+        Auto
+      </button>
+      <div style={tc.leashGroup}>
+        <span style={tc.leashLabel}>Leash</span>
+        <input
+          type="text"
+          inputMode="numeric"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value.replace(/[^0-9]/g, ""))}
+          onBlur={apply}
+          onKeyDown={(e) => { if (e.key === "Enter") { apply(); (e.target as HTMLInputElement).blur(); } }}
+          onFocus={(e) => e.target.select()}
+          placeholder="#"
+          style={tc.leashInput}
+          title="Check in after this many tool calls (Enter to apply)"
+        />
+        {remaining !== null && (
+          <span style={{
+            ...tc.remaining,
+            color: remaining === 0 ? "#f85149" : remaining <= 2 ? "#d29922" : "#8b949e",
+          }}>
+            {remaining}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const tc: Record<string, React.CSSProperties> = {
+  wrapper: {
+    display: "flex",
+    alignItems: "center",
+    gap: 2,
+  },
+  modeBtn: {
+    background: "#21262d",
+    border: "1px solid #30363d",
+    color: "#8b949e",
+    fontSize: 10,
+    padding: "2px 6px",
+    borderRadius: "3px 0 0 3px",
+    cursor: "pointer",
+    fontFamily: "inherit",
+  },
+  modeBtnActive: {
+    background: "#1a3a2a",
+    color: "#3fb950",
+    borderColor: "#238636",
+  },
+  leashGroup: {
+    display: "flex",
+    alignItems: "center",
+    background: "#21262d",
+    border: "1px solid #30363d",
+    borderLeft: "none",
+    borderRadius: "0 3px 3px 0",
+    padding: "0 4px",
+    gap: 3,
+  },
+  leashLabel: {
+    fontSize: 10,
+    color: "#484f58",
+  },
+  leashInput: {
+    width: 20,
+    background: "transparent",
+    border: "none",
+    color: "#c9d1d9",
+    fontSize: 10,
+    fontFamily: "inherit",
+    outline: "none",
+    textAlign: "center",
+    padding: "2px 0",
+  },
+  remaining: {
+    fontSize: 10,
+    fontWeight: 600,
+    fontFamily: "inherit",
+    minWidth: 12,
+    textAlign: "center",
+  },
+};
 
 const s: Record<string, React.CSSProperties> = {
   pane: {
@@ -152,17 +291,21 @@ const s: Record<string, React.CSSProperties> = {
     gap: 6,
     flexShrink: 0,
   },
+  expandBtn: {
+    background: "none",
+    border: "none",
+    color: "#484f58",
+    fontSize: 12,
+    cursor: "pointer",
+    padding: 0,
+    lineHeight: 1,
+  },
   label: {
     fontWeight: 600,
     fontSize: 12,
     whiteSpace: "nowrap",
     overflow: "hidden",
     textOverflow: "ellipsis",
-  },
-  turns: {
-    fontSize: 10,
-    color: "#8b949e",
-    fontFamily: "inherit",
   },
   ctrlBtn: {
     background: "#21262d",
@@ -181,16 +324,10 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: 14,
     padding: 0,
     lineHeight: 1,
+    opacity: 0.5,
   },
-  select: {
-    background: "#21262d",
-    border: "1px solid #30363d",
-    color: "#c9d1d9",
-    fontSize: 10,
-    padding: "2px 4px",
-    borderRadius: 3,
-    fontFamily: "inherit",
-    cursor: "pointer",
+  chatBtnActive: {
+    opacity: 1,
   },
   dismissBtn: {
     background: "none",

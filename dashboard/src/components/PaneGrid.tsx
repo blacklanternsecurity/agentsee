@@ -18,6 +18,7 @@ interface Props {
   onSetThreshold: (agentId: string, t: number | null) => void;
   onScrollTop: (agentId: string) => void;
   onOpenChat: (agentId: string) => void;
+  chatHistories: Record<string, any[]>;
 }
 
 export function PaneGrid({
@@ -34,6 +35,7 @@ export function PaneGrid({
   onRelease,
   onSetThreshold,
   onScrollTop,
+  chatHistories,
   onOpenChat,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -53,7 +55,13 @@ export function PaneGrid({
 
   const displayed = maximizedAgent
     ? [maximizedAgent]
-    : agentIds.filter((id) => agents[id]);
+    : agentIds
+        .filter((id) => agents[id])
+        .sort((a, b) => {
+          const aTime = new Date(agents[a].registered_at).getTime();
+          const bTime = new Date(agents[b].registered_at).getTime();
+          return bTime - aTime; // newest first
+        });
 
   const layout = useAutoTile(displayed.length, width);
 
@@ -91,11 +99,13 @@ export function PaneGrid({
             onMaximize={() =>
               onMaximize(maximizedAgent ? null : agentId)
             }
+            maximized={maximizedAgent === agentId}
             onHold={() => onHold(agentId)}
             onRelease={() => onRelease(agentId)}
             onSetThreshold={(t) => onSetThreshold(agentId, t)}
             onScrollTop={() => onScrollTop(agentId)}
             hasCheckin={!!checkins[agentId]}
+            hasChatHistory={(chatHistories[agentId]?.length ?? 0) > 0}
             onOpenChat={() => onOpenChat(agentId)}
           />
         );

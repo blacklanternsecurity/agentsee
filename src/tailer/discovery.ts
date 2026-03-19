@@ -1,7 +1,20 @@
-import { readdir, stat, readlink, readFile } from "fs/promises";
+import { readdir, stat, readlink, unlink } from "fs/promises";
 import { join, basename } from "path";
 import { homedir } from "os";
 import { extractLabel } from "./jsonl-parser.js";
+
+/**
+ * Delete an agent's JSONL transcript from disk.
+ * Returns true if a file was deleted.
+ */
+export async function purgeAgent(filePath: string): Promise<boolean> {
+  try {
+    await unlink(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export interface DiscoveredAgent {
   label: string;
@@ -41,6 +54,7 @@ export async function discoverAgents(
           seen.add(filePath);
 
           const agentId = basename(entry, ".jsonl");
+
           const label = await getLabel(filePath) ?? agentId;
           results.push({ label, filePath, mtime: st.mtimeMs, agentId });
         } catch {}
@@ -69,6 +83,7 @@ export async function discoverAgents(
 
         const agentId =
           basename(target, ".jsonl") || basename(entry, ".output");
+
         const label = await getLabel(filePath) ?? agentId;
         results.push({ label, filePath, mtime: st.mtimeMs, agentId });
       } catch {}
@@ -86,43 +101,45 @@ function getTasksDir(projectDir: string): string {
 
 async function findSubagentDirs(projectDir: string): Promise<string[]> {
   const projectsRoot = join(homedir(), ".claude", "projects");
-
-  // Try to find the matching project directory
-  let projectBase = "";
-  for (const candidate of [projectDir, process.cwd()]) {
-    if (!candidate) continue;
-    const encoded = candidate.replace(/\//g, "-");
-    const path = join(projectsRoot, encoded);
-    try {
-      await stat(path);
-      projectBase = path;
-      break;
-    } catch {}
-  }
-
-  // Fallback: most recently modified project dir
-  if (!projectBase) {
-    try {
-      const entries = await readdir(projectsRoot);
-      let best = { mtime: 0, path: "" };
-      for (const entry of entries) {
-        if (!entry.startsWith("-")) continue;
-        const path = join(projectsRoot, entry);
-        try {
-          const st = await stat(path);
-          if (st.mtimeMs > best.mtime) {
-            best = { mtime: st.mtimeMs, path };
-          }
-        } catch {}
-      }
-      if (best.path) projectBase = best.path;
-    } catch {}
-  }
-
-  if (!projectBase) return [];
-
-  // Find all session/subagents directories
   const results: { mtime: number; path: string }[] = [];
+
+  // If a specific project dir is set, search only that project
+  if (projectDir) {
+    const encoded = projectDir.replace(/\//g, "-");
+    const projectBase = join(projectsRoot, encoded);
+    try {
+      await stat(projectBase);
+      await scanProjectBase(projectBase, results);
+      if (results.length > 0) {
+        results.sort((a, b) => b.mtime - a.mtime);
+        return results.map((r) => r.path);
+      }
+    } catch {}
+  }
+
+  // Default: scan ALL projects under ~/.claude/projects/
+  try {
+    const entries = await readdir(projectsRoot);
+    for (const entry of entries) {
+      if (!entry.startsWith("-")) continue;
+      const projectBase = join(projectsRoot, entry);
+      try {
+        const st = await stat(projectBase);
+        if (st.isDirectory()) {
+          await scanProjectBase(projectBase, results);
+        }
+      } catch {}
+    }
+  } catch {}
+
+  results.sort((a, b) => b.mtime - a.mtime);
+  return results.map((r) => r.path);
+}
+
+async function scanProjectBase(
+  projectBase: string,
+  results: { mtime: number; path: string }[]
+): Promise<void> {
   try {
     const sessions = await readdir(projectBase);
     for (const session of sessions) {
@@ -135,9 +152,6 @@ async function findSubagentDirs(projectDir: string): Promise<string[]> {
       } catch {}
     }
   } catch {}
-
-  results.sort((a, b) => b.mtime - a.mtime);
-  return results.map((r) => r.path);
 }
 
 async function getLabel(filePath: string): Promise<string | null> {
