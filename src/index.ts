@@ -74,8 +74,9 @@ if (existsSync(join(dashboardDist, "index.html"))) {
   console.log(`  Dashboard:      http://localhost:${PORT}/ (${dashboardDist})`);
 }
 
-server.listen(PORT, () => {
-  console.log(`agentsee listening on :${PORT}`);
+const HOST = process.env.AGENTSEE_HOST ?? "127.0.0.1";
+server.listen(PORT, HOST, () => {
+  console.log(`agentsee listening on ${HOST}:${PORT}`);
   console.log(`  Hook receiver:  http://localhost:${PORT}/hook/pre`);
   console.log(`  Agent status:   http://localhost:${PORT}/agent/status`);
   console.log(`  MCP server:     http://localhost:${PORT}/mcp`);
