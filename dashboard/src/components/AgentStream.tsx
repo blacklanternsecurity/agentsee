@@ -17,16 +17,23 @@ export function AgentStream({ entries, onScrollTop }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [autoFollow, setAutoFollow] = useState(true);
   const prevLenRef = useRef(0);
+  const programmaticScroll = useRef(false);
 
   // Auto-scroll on new entries
   useEffect(() => {
     if (autoFollow && containerRef.current && entries.length > prevLenRef.current) {
+      programmaticScroll.current = true;
       containerRef.current.scrollTop = containerRef.current.scrollHeight;
     }
     prevLenRef.current = entries.length;
   }, [entries.length, autoFollow]);
 
   const handleScroll = () => {
+    // Ignore scroll events caused by programmatic scrollTop assignment
+    if (programmaticScroll.current) {
+      programmaticScroll.current = false;
+      return;
+    }
     const el = containerRef.current;
     if (!el) return;
     const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
@@ -61,6 +68,7 @@ export function AgentStream({ entries, onScrollTop }: Props) {
           onClick={() => {
             setAutoFollow(true);
             if (containerRef.current) {
+              programmaticScroll.current = true;
               containerRef.current.scrollTop =
                 containerRef.current.scrollHeight;
             }
