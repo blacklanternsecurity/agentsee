@@ -81,8 +81,11 @@ export async function discoverAgents(
         if (seen.has(resolved)) continue;
         seen.add(resolved);
 
-        const agentId =
-          basename(target, ".jsonl") || basename(entry, ".output");
+        const targetBase = basename(target, ".jsonl");
+        // Skip non-subagent files (parent sessions have UUID names, not agent-* names)
+        if (!targetBase.startsWith("agent-")) continue;
+
+        const agentId = targetBase || basename(entry, ".output");
 
         const label = await getLabel(filePath) ?? agentId;
         results.push({ label, filePath, mtime: st.mtimeMs, agentId });
