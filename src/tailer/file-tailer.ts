@@ -37,11 +37,20 @@ export class FileTailer {
   async start(): Promise<void> {
     await this.readNewContent();
 
-    // If the transcript already ends with a text-only assistant message,
-    // the agent is already done — fire completion immediately.
-    if (this.lastAssistantTextOnly && !this.completionFired) {
-      this.completionFired = true;
-      this.onComplete?.();
+    // Check if the agent is already dead:
+    // 1. Transcript ends with a text-only assistant message (graceful completion), OR
+    // 2. File hasn't been modified in the last 30 seconds (killed/crashed)
+    if (!this.completionFired) {
+      let stale = false;
+      try {
+        const st = await stat(this.filePath);
+        stale = Date.now() - st.mtimeMs > 30_000;
+      } catch {}
+
+      if (this.lastAssistantTextOnly || stale) {
+        this.completionFired = true;
+        this.onComplete?.();
+      }
     }
 
     // fs.watch for immediate notification
