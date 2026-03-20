@@ -143,6 +143,13 @@ export function AgentBrowser({
                     placeholder="PURGE ALL"
                     autoFocus
                     spellCheck={false}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && purgeAllInput.toLowerCase() === "purge all") {
+                        onRemoveAll();
+                        setPurgeAllStep("idle");
+                        setPurgeAllInput("");
+                      }
+                    }}
                   />
                   <button
                     style={s.confirmNo}
@@ -153,13 +160,13 @@ export function AgentBrowser({
                   <button
                     style={{
                       ...s.purgeAllDelete,
-                      opacity: purgeAllInput === "PURGE ALL" ? 1 : 0.4,
+                      opacity: purgeAllInput.toLowerCase() === "purge all" ? 1 : 0.4,
                       cursor:
-                        purgeAllInput === "PURGE ALL"
+                        purgeAllInput.toLowerCase() === "purge all"
                           ? "pointer"
                           : "not-allowed",
                     }}
-                    disabled={purgeAllInput !== "PURGE ALL"}
+                    disabled={purgeAllInput.toLowerCase() !== "purge all"}
                     onClick={() => {
                       onRemoveAll();
                       setPurgeAllStep("idle");

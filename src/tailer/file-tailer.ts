@@ -37,6 +37,13 @@ export class FileTailer {
   async start(): Promise<void> {
     await this.readNewContent();
 
+    // If the transcript already ends with a text-only assistant message,
+    // the agent is already done — fire completion immediately.
+    if (this.lastAssistantTextOnly && !this.completionFired) {
+      this.completionFired = true;
+      this.onComplete?.();
+    }
+
     // fs.watch for immediate notification
     try {
       this.watcher = watch(this.filePath, () => {

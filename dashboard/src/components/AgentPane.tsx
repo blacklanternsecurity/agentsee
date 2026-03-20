@@ -128,11 +128,7 @@ const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", 
 
 function IdleIndicator({ idle, complete }: { idle: number; complete: boolean }) {
   if (complete) {
-    return (
-      <span style={{ color: "#484f58", fontSize: 10, fontFamily: "inherit" }}>
-        {formatIdle(idle)}
-      </span>
-    );
+    return null;
   }
 
   const showSpinner = idle >= 5_000 && idle < 300_000; // 5s to 5min
