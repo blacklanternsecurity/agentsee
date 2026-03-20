@@ -35,25 +35,19 @@ export function ChatPanel({ agentId, agentLabel, checkin, history, onRespond, on
   const [keepHeld, setKeepHeld] = useState(false);
   const [leashDraft, setLeashDraft] = useState("");
 
-  // Track checkin start time for MCP timeout countdown
-  const checkinStartRef = useRef<number | null>(null);
+  // MCP timeout countdown using the stable receivedAt from workspace state
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
 
   useEffect(() => {
     if (checkin) {
-      if (checkinStartRef.current === null) {
-        checkinStartRef.current = Date.now();
-      }
       const tick = () => {
-        const elapsed = Date.now() - checkinStartRef.current!;
-        const remaining = Math.max(0, MCP_TIMEOUT_MS - elapsed);
+        const remaining = Math.max(0, MCP_TIMEOUT_MS - (Date.now() - checkin.receivedAt));
         setTimeLeft(remaining);
       };
       tick();
       const id = setInterval(tick, 1000);
       return () => clearInterval(id);
     } else {
-      checkinStartRef.current = null;
       setTimeLeft(null);
     }
   }, [checkin]);

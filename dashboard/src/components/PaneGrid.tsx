@@ -105,6 +105,7 @@ export function PaneGrid({
             onSetThreshold={(t) => onSetThreshold(agentId, t)}
             onScrollTop={() => onScrollTop(agentId)}
             hasCheckin={!!checkins[agentId]}
+            checkinReceivedAt={checkins[agentId]?.receivedAt ?? null}
             hasChatHistory={(chatHistories[agentId]?.length ?? 0) > 0}
             onOpenChat={() => onOpenChat(agentId)}
           />

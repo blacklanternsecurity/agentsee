@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { ModeBadge } from "./ModeBadge";
 import { AgentStream } from "./AgentStream";
 import type { AgentInfo, StreamEntry } from "../types";
@@ -18,6 +18,7 @@ interface Props {
   onSetThreshold: (t: number | null) => void;
   onScrollTop: () => void;
   hasCheckin: boolean;
+  checkinReceivedAt: number | null;
   hasChatHistory: boolean;
   onOpenChat: () => void;
 }
@@ -48,6 +49,7 @@ export function AgentPane({
   onSetThreshold,
   onScrollTop,
   hasCheckin,
+  checkinReceivedAt,
   hasChatHistory,
   onOpenChat,
 }: Props) {
@@ -65,27 +67,22 @@ export function AgentPane({
   // Recompute with `now` to ensure reactivity
   const idleMs = now - new Date(agent.last_activity).getTime();
 
-  // MCP timeout countdown when agent is checking in
-  const checkinStartRef = useRef<number | null>(null);
+  // MCP timeout countdown using stable receivedAt from workspace state
   const [checkinTimeLeft, setCheckinTimeLeft] = useState<number | null>(null);
 
   useEffect(() => {
-    if (hasCheckin) {
-      if (checkinStartRef.current === null) {
-        checkinStartRef.current = Date.now();
-      }
+    if (hasCheckin && checkinReceivedAt !== null) {
       const tick = () => {
-        const remaining = Math.max(0, MCP_TIMEOUT_MS - (Date.now() - checkinStartRef.current!));
+        const remaining = Math.max(0, MCP_TIMEOUT_MS - (Date.now() - checkinReceivedAt));
         setCheckinTimeLeft(remaining);
       };
       tick();
       const id = setInterval(tick, 1000);
       return () => clearInterval(id);
     } else {
-      checkinStartRef.current = null;
       setCheckinTimeLeft(null);
     }
-  }, [hasCheckin]);
+  }, [hasCheckin, checkinReceivedAt]);
 
   return (
     <div

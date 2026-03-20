@@ -26,6 +26,8 @@ export interface StreamEntry {
 export interface CheckinData {
   summary: string;
   question?: string;
+  /** Timestamp (ms) when this checkin was received. Used for MCP timeout countdown. */
+  receivedAt: number;
 }
 
 export interface Tab {
