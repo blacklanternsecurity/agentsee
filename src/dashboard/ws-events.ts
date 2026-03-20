@@ -106,6 +106,10 @@ export function setupWsHandlers(
         case "agent:remove":
           tailerManager?.removeAgent(msg.agent_id);
           break;
+
+        case "agent:remove-all":
+          tailerManager?.removeAllAgents();
+          break;
       }
     });
   });

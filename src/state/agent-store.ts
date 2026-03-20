@@ -138,6 +138,10 @@ export class AgentStore {
     return Array.from(this.agents.values());
   }
 
+  allIds(): string[] {
+    return Array.from(this.agents.keys());
+  }
+
   toJSON(): Record<
     string,
     Omit<AgentState, "pending_checkin"> & { has_pending_checkin: boolean }

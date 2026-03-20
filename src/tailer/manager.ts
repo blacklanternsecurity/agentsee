@@ -29,6 +29,15 @@ export class TailerManager {
     if (tailer) return tailer;
 
     tailer = new FileTailer(agentId, filePath);
+    tailer.onComplete = () => {
+      if (this.store.setComplete(agentId)) {
+        broadcast(this.wss, {
+          type: "agent:status",
+          agent_id: agentId,
+          data: { status: "complete" },
+        });
+      }
+    };
     this.tailers.set(agentId, tailer);
     await tailer.start();
     return tailer;
@@ -109,6 +118,26 @@ export class TailerManager {
   unsubscribeAll(ws: WebSocket): void {
     for (const tailer of this.tailers.values()) {
       tailer.subscribers.delete(ws);
+    }
+  }
+
+  /** Permanently remove all agents — stops all tailers, deletes all JSONL from disk, removes all from state. */
+  async removeAllAgents(): Promise<void> {
+    const agentIds = [...this.tailers.keys(), ...this.store.allIds()];
+    const unique = [...new Set(agentIds)];
+    for (const id of unique) {
+      const tailer = this.tailers.get(id);
+      if (tailer) {
+        tailer.stop();
+        await purgeAgent(tailer.filePath);
+        this.tailers.delete(id);
+      }
+      this.store.remove(id);
+      broadcast(this.wss, {
+        type: "agent:removed",
+        agent_id: id,
+        data: {},
+      });
     }
   }
 

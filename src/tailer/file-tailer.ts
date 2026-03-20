@@ -11,6 +11,15 @@ export class FileTailer {
   readonly buffer: RingBuffer<StreamEntry>;
   readonly subscribers = new Set<WebSocket>();
 
+  /** Set when the last assistant message had no tool_use (potential completion). */
+  lastAssistantTextOnly = false;
+  /** Timestamp of when lastAssistantTextOnly became true. */
+  lastAssistantTextOnlyAt: number | null = null;
+  /** Callback fired once when completion is detected. */
+  onComplete: (() => void) | null = null;
+  private completionFired = false;
+  private completionTimer: ReturnType<typeof setTimeout> | null = null;
+
   private fileOffset = 0;
   private pending: PendingTools = new Map();
   private watcher: FSWatcher | null = null;
@@ -27,6 +36,22 @@ export class FileTailer {
   /** Start tailing. Reads existing content then watches for changes. */
   async start(): Promise<void> {
     await this.readNewContent();
+
+    // Check if the agent is already dead:
+    // 1. Transcript ends with a text-only assistant message (graceful completion), OR
+    // 2. File hasn't been modified in the last 30 seconds (killed/crashed)
+    if (!this.completionFired) {
+      let stale = false;
+      try {
+        const st = await stat(this.filePath);
+        stale = Date.now() - st.mtimeMs > 30_000;
+      } catch {}
+
+      if (this.lastAssistantTextOnly || stale) {
+        this.completionFired = true;
+        this.onComplete?.();
+      }
+    }
 
     // fs.watch for immediate notification
     try {
@@ -51,6 +76,10 @@ export class FileTailer {
     if (this.pollTimer) {
       clearInterval(this.pollTimer);
       this.pollTimer = null;
+    }
+    if (this.completionTimer) {
+      clearTimeout(this.completionTimer);
+      this.completionTimer = null;
     }
   }
 
@@ -81,12 +110,69 @@ export class FileTailer {
           this.buffer.push(entry);
           this.broadcastEntry(entry);
         }
+
+        // Track whether this line is a text-only assistant message (potential completion)
+        this.detectPotentialCompletion(line);
       }
     } catch {
       // File not ready or deleted — ignore
     } finally {
       await fh?.close();
     }
+  }
+
+  private detectPotentialCompletion(line: string): void {
+    if (this.completionFired) return;
+    try {
+      const obj = JSON.parse(line);
+      if (obj.type === "assistant") {
+        const content = obj.message?.content;
+        const hasToolUse =
+          Array.isArray(content) &&
+          content.some(
+            (c: any) => typeof c === "object" && c !== null && c.type === "tool_use"
+          );
+        if (hasToolUse) {
+          // Agent is still working — cancel any pending completion
+          this.lastAssistantTextOnly = false;
+          this.lastAssistantTextOnlyAt = null;
+          if (this.completionTimer) {
+            clearTimeout(this.completionTimer);
+            this.completionTimer = null;
+          }
+        } else {
+          // Text-only assistant message — start the completion countdown
+          this.lastAssistantTextOnly = true;
+          this.lastAssistantTextOnlyAt = Date.now();
+          this.scheduleCompletionCheck();
+        }
+      } else if (obj.type === "user") {
+        // New user message means conversation continues — cancel completion
+        this.lastAssistantTextOnly = false;
+        this.lastAssistantTextOnlyAt = null;
+        if (this.completionTimer) {
+          clearTimeout(this.completionTimer);
+          this.completionTimer = null;
+        }
+      }
+    } catch {
+      // Not valid JSON, ignore
+    }
+  }
+
+  private scheduleCompletionCheck(): void {
+    if (this.completionTimer) clearTimeout(this.completionTimer);
+    this.completionTimer = setTimeout(() => {
+      this.completionTimer = null;
+      if (
+        this.lastAssistantTextOnly &&
+        !this.completionFired &&
+        !this.stopped
+      ) {
+        this.completionFired = true;
+        this.onComplete?.();
+      }
+    }, 10_000);
   }
 
   private broadcastEntry(entry: StreamEntry): void {

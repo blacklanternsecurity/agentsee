@@ -33,24 +33,33 @@ const styles: Record<string, React.CSSProperties> = {
     border: "1px solid #1f6feb",
     animation: "pulse 1.5s ease-in-out infinite",
   },
+  complete: {
+    background: "#1a1a1a",
+    color: "#484f58",
+    border: "1px solid #30363d",
+  },
 };
 
 export function ModeBadge({ mode, status }: Props) {
   const variant =
-    status === "held"
-      ? "held"
-      : status === "checking_in"
-        ? "checking_in"
-        : mode;
+    status === "complete"
+      ? "complete"
+      : status === "held"
+        ? "held"
+        : status === "checking_in"
+          ? "checking_in"
+          : mode;
 
   const label =
-    status === "held"
-      ? "HELD"
-      : status === "checking_in"
-        ? "CHECKING IN"
-        : mode === "supervised"
-          ? "SUPERVISED"
-          : "AUTO";
+    status === "complete"
+      ? "DONE"
+      : status === "held"
+        ? "HELD"
+        : status === "checking_in"
+          ? "CHECKING IN"
+          : mode === "supervised"
+            ? "SUPERVISED"
+            : "AUTO";
 
   return <span style={{ ...styles.badge, ...styles[variant] }}>{label}</span>;
 }

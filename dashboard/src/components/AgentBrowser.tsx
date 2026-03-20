@@ -7,6 +7,7 @@ interface Props {
   currentTabAgents: string[];
   onToggle: (agentId: string) => void;
   onRemove: (agentId: string) => void;
+  onRemoveAll: () => void;
   onClose: () => void;
 }
 
@@ -15,9 +16,12 @@ export function AgentBrowser({
   currentTabAgents,
   onToggle,
   onRemove,
+  onRemoveAll,
   onClose,
 }: Props) {
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [purgeAllStep, setPurgeAllStep] = useState<"idle" | "confirming">("idle");
+  const [purgeAllInput, setPurgeAllInput] = useState("");
 
   const sorted = Object.values(agents).sort(
     (a, b) =>
@@ -68,7 +72,9 @@ export function AgentBrowser({
                   </div>
                   <div style={s.itemRight}>
                     <ModeBadge mode={agent.mode} status={agent.status} />
-                    <span style={s.idle}>{idleStr}</span>
+                    {agent.status !== "complete" && (
+                      <span style={s.idle}>{idleStr}</span>
+                    )}
                     <button
                       style={s.purgeBtn}
                       onClick={(e) => {
@@ -109,6 +115,73 @@ export function AgentBrowser({
             );
           })}
         </div>
+        {sorted.length > 0 && (
+          <div style={s.purgeAllSection}>
+            {purgeAllStep === "idle" ? (
+              <button
+                style={s.purgeAllBtn}
+                onClick={() => {
+                  setPurgeAllStep("confirming");
+                  setPurgeAllInput("");
+                }}
+              >
+                Purge All Agents
+              </button>
+            ) : (
+              <div style={s.purgeAllConfirm}>
+                <span style={s.purgeAllWarning}>
+                  This will permanently delete all {sorted.length} agent
+                  transcript{sorted.length !== 1 ? "s" : ""} from disk. This
+                  cannot be undone.
+                </span>
+                <label style={s.purgeAllLabel}>
+                  Type <strong>PURGE ALL</strong> to confirm:
+                </label>
+                <div style={s.purgeAllRow}>
+                  <input
+                    style={s.purgeAllInput}
+                    value={purgeAllInput}
+                    onChange={(e) => setPurgeAllInput(e.target.value)}
+                    placeholder="PURGE ALL"
+                    autoFocus
+                    spellCheck={false}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && purgeAllInput.toLowerCase() === "purge all") {
+                        onRemoveAll();
+                        setPurgeAllStep("idle");
+                        setPurgeAllInput("");
+                      }
+                    }}
+                  />
+                  <button
+                    style={s.confirmNo}
+                    onClick={() => setPurgeAllStep("idle")}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    style={{
+                      ...s.purgeAllDelete,
+                      opacity: purgeAllInput.toLowerCase() === "purge all" ? 1 : 0.4,
+                      cursor:
+                        purgeAllInput.toLowerCase() === "purge all"
+                          ? "pointer"
+                          : "not-allowed",
+                    }}
+                    disabled={purgeAllInput.toLowerCase() !== "purge all"}
+                    onClick={() => {
+                      onRemoveAll();
+                      setPurgeAllStep("idle");
+                      setPurgeAllInput("");
+                    }}
+                  >
+                    Delete All
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
         <div style={s.footer}>
           Press <kbd style={s.kbd}>b</kbd> or <kbd style={s.kbd}>Esc</kbd> to
           close
@@ -249,6 +322,66 @@ const s: Record<string, React.CSSProperties> = {
     borderRadius: 3,
     cursor: "pointer",
     fontFamily: "inherit",
+  },
+  purgeAllSection: {
+    padding: "8px 12px",
+    borderTop: "1px solid #21262d",
+  },
+  purgeAllBtn: {
+    background: "none",
+    border: "1px solid #30363d",
+    color: "#484f58",
+    fontSize: 11,
+    padding: "4px 10px",
+    borderRadius: 3,
+    cursor: "pointer",
+    fontFamily: "inherit",
+    width: "100%",
+  },
+  purgeAllConfirm: {
+    background: "#1c1210",
+    border: "1px solid #da3633",
+    borderRadius: 4,
+    padding: "10px 12px",
+    display: "flex",
+    flexDirection: "column" as const,
+    gap: 8,
+  },
+  purgeAllWarning: {
+    color: "#f85149",
+    fontSize: 11,
+    lineHeight: 1.4,
+  },
+  purgeAllLabel: {
+    color: "#c9d1d9",
+    fontSize: 11,
+  },
+  purgeAllRow: {
+    display: "flex",
+    gap: 6,
+    alignItems: "center",
+  },
+  purgeAllInput: {
+    flex: 1,
+    background: "#0d1117",
+    border: "1px solid #30363d",
+    color: "#c9d1d9",
+    fontSize: 12,
+    padding: "4px 8px",
+    borderRadius: 3,
+    fontFamily: "inherit",
+    outline: "none",
+  },
+  purgeAllDelete: {
+    background: "#da3633",
+    border: "none",
+    color: "#fff",
+    fontSize: 11,
+    padding: "5px 12px",
+    borderRadius: 3,
+    fontFamily: "inherit",
+    fontWeight: 600,
+    whiteSpace: "nowrap" as const,
   },
   footer: {
     padding: "6px 12px",
