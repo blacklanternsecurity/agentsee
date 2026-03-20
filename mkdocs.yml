@@ -1,0 +1,28 @@
+site_name: agentsee
+site_description: Operator control plane for Claude Code agents
+repo_url: https://github.com/blacklanternsecurity/agentsee
+theme:
+  name: material
+  palette:
+    scheme: slate
+    primary: blue
+    accent: blue
+  features:
+    - navigation.sections
+    - navigation.expand
+    - content.code.copy
+    - search.suggest
+nav:
+  - Home: index.md
+  - Installation: installation.md
+  - Usage: usage.md
+  - Dashboard Guide: dashboard.md
+  - Authentication: authentication.md
+  - API Reference: api.md
+markdown_extensions:
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - admonition
+  - pymdownx.details
+  - tables
