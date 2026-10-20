@@ -26,5 +26,5 @@
     "tsx": "^4.19.0",
     "typescript": "^5.7.0"
   },
-  "license": "GPL-3.0"
+  "license": "AGPL-3.0"
 }
